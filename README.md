@@ -224,8 +224,170 @@ public static string GetConentType(string fileName)
 
 ## Face Detection
 
+Still working on run.csx letes include the following code at the begining of it (before run method):
 
+```
+public static string contentModerationKey = "zzzzzzzzzzzzzzzzzzzzzzzzzz";
 
+```
+and also this other part in the end:
 
+```
+public static bool IsGoodByFaceModerator(Stream image, string contentType, TraceWriter log)
+       {
+           try
+           {
+               var url = "https://southcentralus.api.cognitive.microsoft.com/contentmoderator/moderate/v1.0/ProcessImage/FindFaces";
+               Task<string> task = Task.Run<string>(async () => await GetHttpResponseString(url, contentModerationKey, image, contentType));
+               string result = task.Result;
+               if (String.IsNullOrEmpty(result))
+               {
+                   return false;
+               }
+               else
+               {
+                   dynamic json = JValue.Parse(result);
+                   return ((bool)json.Result && json.Count == 1);
+               }
+           }
+           catch (Exception ex)
+           {
+               log.Error("Face API Error: " + ex.ToString());
+               return false;
+           }
+ 
+       }
+```
+
+PS: You need to update url according to your content moderator subscription.
+
+## Evaluating for Adult and Racy Content
+
+Content Moderator’s Image Moderation Evaluate API is used to predict whether the image contains potential adult or racy content. Add following method in the end of the file to check it:
+```
+//To filter adult or racy content
+  public static bool IsGoodByImageModerator(Stream image, string contentType, TraceWriter log)
+        {
+            try
+            {
+                var url = "https://southcentralus.api.cognitive.microsoft.com/contentmoderator/moderate/v1.0/ProcessImage/Evaluate";
+                Task<string> task = Task.Run<string>(async () => await GetHttpResponseString(url, contentModerationKey, image, contentType));
+                string result = task.Result;
+                if (String.IsNullOrEmpty(result))
+                {
+                    return false;
+                }
+                else
+                {
+                    dynamic json = JValue.Parse(result);
+                    return (!((bool)json.IsImageAdultClassified || (bool)json.IsImageRacyClassified));
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Error("Content API Error: " + ex.ToString());
+                return false;
+            }
+ 
+        }
+```
+
+First, we will validate faces count if it is okay then evaluate image for adult or racy content.
+```
+public static bool IsGoodByModerator(Stream image, string name, TraceWriter log)
+       {
+           string contentType = GetConentType(name);
+ 
+           if (IsGoodByFaceModerator(image, contentType, log))
+           {
+               log.Info("Face Moderation: Passed");
+               return IsGoodByImageModerator(image, contentType, log);
+           }
+           else
+           {
+               log.Info("Face Moderation: Failed");
+               return false;
+           }
+ 
+       }
+```
+ Modify the run function:
+```
+
+public static void Run(Stream myBlob, string name,Stream outputBlob, TraceWriter log)
+{
+    log.Info($"C# Blob trigger function Processed blob\n Name:{name} \n Size: {myBlob.Length} Bytes");
+    bool result = IsGoodByModerator(myBlob, name, log);
+    log.Info("Image Moderation " + (result ? "Passed" : "Failed"));
+ 
+}
+```
+
+At this part, when you add a valid image in container1 then moderation info in the log.
+
+## Add watermark on images
+
+The next step is to add watermark on valid image and save to container2. Add following method to add text as watermark on the image:
+
+```
+private static void WriteWatermark(string watermarkContent, Stream originalImage, Stream newImage)
+     {
+         originalImage.Position = 0;
+         using (Image inputImage = Image
+           .FromStream(originalImage, true))
+         {
+             using (Graphics graphic = Graphics
+              .FromImage(inputImage))
+             {
+                 Font font = new Font("Georgia", 36, FontStyle.Bold);
+                 SizeF textSize = graphic.MeasureString(watermarkContent, font);
+ 
+                 float xCenterOfImg = (inputImage.Width / 2);
+                 float yPosFromBottom = (int)(inputImage.Height * 0.90) - (textSize.Height / 2);
+ 
+                 graphic.SmoothingMode = SmoothingMode.HighQuality;
+                 graphic.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                 graphic.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                 graphic.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+ 
+ 
+                 StringFormat StrFormat = new StringFormat();
+                 StrFormat.Alignment = StringAlignment.Center;
+ 
+                 SolidBrush semiTransBrush2 = new SolidBrush(Color.FromArgb(153, 0, 0, 0));
+                 graphic.DrawString(watermarkContent, font, semiTransBrush2, xCenterOfImg + 1, yPosFromBottom + 1, StrFormat);
+ 
+                 SolidBrush semiTransBrush = new SolidBrush(Color.FromArgb(153, 255, 255, 255));
+                 graphic.DrawString(watermarkContent, font, semiTransBrush, xCenterOfImg, yPosFromBottom, StrFormat);
+ 
+                 graphic.Flush();
+                 inputImage.Save(newImage, ImageFormat.Jpeg);
+             }
+         }
+     }
+```
+
+You can update font size as per your choice. Let’s update Run method to call it.
+
+```
+
+public static void Run(Stream myBlob, string name,Stream outputBlob, TraceWriter log)
+{
+    log.Info($"C# Blob trigger function Processed blob\n Name:{name} \n Size: {myBlob.Length} Bytes");
+    bool result = IsGoodByModerator(myBlob, name, log);
+    log.Info("Image Moderation: " + (result ? "Passed" : "Failed"));
+    try{
+        string watermarkText = "TechBrij";
+        WriteWatermark(watermarkText,myBlob,outputBlob);
+        log.Info("Added watermark and copied successfully");
+    }
+    catch(Exception ex)
+    {
+        log.Info("Watermark Error: " + ex.ToString());
+    }    
+ 
+}
+```
+Finnaly, now you can upload a valid image in container1 then you will get watermarked image in container2.
 
 
