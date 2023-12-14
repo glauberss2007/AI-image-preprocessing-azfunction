@@ -162,6 +162,68 @@ public static void Run(Stream myBlob, string name, Stream outputBlob, TraceWrite
 
 10. On Save, the function is compiled. Any errors during the build are displayed in the Logs window. Now when any file is added on container1, this function will be called automatically. In the logs, you will be able to see the output logs.
 
+11. Lets add some references and namespaces in the top of ou blob triger named "run.csx".
+```
+using System.IO;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using Newtonsoft.Json.Linq;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+```
+
+12. Let’s also add following methods for http request and get response as string. It will be used to call congnitive service APIs and also get content type from file extension.
+```
+
+public static async Task<string> GetHttpResponseString(String url, String subscriptionKey, Stream image, string contentType)
+       {
+           using (var ms = new MemoryStream())
+           {
+               image.Position = 0;
+               image.CopyTo(ms);
+               ms.Position = 0;
+               using (var client = new HttpClient())
+               {
+ 
+                   var content = new StreamContent(ms);
+                   client.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", subscriptionKey);
+                   content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+                   var httpResponse = await client.PostAsync(url, content);
+ 
+                   if (httpResponse.StatusCode == HttpStatusCode.OK)
+                   {
+                       return await httpResponse.Content.ReadAsStringAsync();
+                   }
+               }
+           }
+           return null;
+       }
+
+
+public static string GetConentType(string fileName)
+     {
+         string name = fileName.ToLower();
+         string contentType = "image/jpeg";
+         if (name.EndsWith("png"))
+         {
+             contentType = "image/png";
+         }
+         else if (name.EndsWith("gif"))
+         {
+             contentType = "image/gif";
+         }
+         else if (name.EndsWith("bmp"))
+         {
+             contentType = "image/bmp";
+         }
+         return contentType;
+     }
+```
+
+## Face Detection
+
 
 
 
