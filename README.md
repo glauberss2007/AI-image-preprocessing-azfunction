@@ -390,4 +390,15 @@ public static void Run(Stream myBlob, string name,Stream outputBlob, TraceWriter
 ```
 Finnaly, now you can upload a valid image in container1 then you will get watermarked image in container2.
 
+## Deploy automation using terraform
+
+In this repository you can found a terraform file that contains an structure to deploy all necessary resources. They are:
+
+- A Resource Group
+- An Azure Storage Account with two Blob Containers (one for user images, another for processed images)
+- An Azure Function App with an associated App Service Plan
+- Access policies for Blob Containers
+- A Blob Trigger associated with the Function App to respond to changes in the "user-images" container
+
+PS: Remember that for sensitive information like access keys or connection strings, consider utilizing Terraform's sensitive data handling mechanisms or environment variables for enhanced security.
 
